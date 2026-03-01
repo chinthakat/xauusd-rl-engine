@@ -1,0 +1,55 @@
+# ── Credentials & Secrets ──
+config.py
+
+# ── Logs & Output ──
+logs/
+*.log
+
+# ── Data Files ──
+Datafiles/
+*.csv
+
+# ── Trained Models ──
+models/
+*.zip
+*.pkl
+*.pt
+*.pth
+*.onnx
+
+# ── Python ──
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# ── Virtual Environment ──
+venv/
+.venv/
+env/
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Testing ──
+.pytest_cache/
+htmlcov/
+.coverage
+
+# ── TensorBoard ──
+runs/
+tensorboard/
+
+# ── OS ──
+Thumbs.db
+.DS_Store
+
+# ── MQL5 Compiled ──
+*.ex5
