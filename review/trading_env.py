@@ -133,14 +133,6 @@ class TradingEnv(gym.Env):
         self.peak_equity = self.initial_balance
         self.trade_log = []
 
-        # Inactivity tracking (flat = no position, no trade)
-        self.steps_flat = 0
-
-        # Differential Sharpe tracking
-        self._sharpe_A = 0.0  # Running mean return
-        self._sharpe_B = 0.0  # Running mean squared return
-        self._sharpe_eta = 0.01  # EMA decay rate
-
         # Equity curve (tracked every step for proper metrics)
         self.equity_curve = []
 
@@ -295,78 +287,47 @@ class TradingEnv(gym.Env):
         self.equity_curve.append(self.equity)
 
         # ══════════════════════════════════════════
-        # REWARD (6 components)
+        # SIMPLIFIED REWARD (4 components only)
         # ══════════════════════════════════════════
 
-        # 1. Realized P/L — log return with ASYMMETRIC win/loss multiplier
-        #    Wins get 1.5x reward → agent prefers high-probability setups
+        # 1. Realized P/L — log return (core learning signal)
         if trade_closed and realized_pnl != 0:
             old_bal = self.balance - realized_pnl
             if old_bal > 0 and self.balance > 0:
-                log_ret = np.log(self.balance / old_bal) * 100
-                if log_ret > 0:
-                    reward += log_ret * 1.5   # Winning trades amplified
-                else:
-                    reward += log_ret * 1.0   # Losses at normal scale
+                reward += np.log(self.balance / old_bal) * 100
             else:
                 reward += np.sign(realized_pnl) * 0.1
 
-        # 2. Differential Sharpe Ratio (Moody & Saffell, 2001)
-        #    Gives incremental reward based on risk-adjusted return
-        if trade_closed:
-            ret = realized_pnl / self.initial_balance
-            delta_A = ret - self._sharpe_A
-            delta_B = ret * ret - self._sharpe_B
-            self._sharpe_A += self._sharpe_eta * delta_A
-            self._sharpe_B += self._sharpe_eta * delta_B
-            denom = self._sharpe_B - self._sharpe_A ** 2
-            if denom > 1e-10:
-                dSR = (self._sharpe_B * delta_A - 0.5 * self._sharpe_A * delta_B) / (denom ** 1.5)
-                reward += np.clip(dSR * 0.1, -0.5, 0.5)  # Scaled, clipped
-
-        # 3. Holding cost — tiny constant per step in position
+        # 2. Holding cost — tiny constant per step in position
         if self.position != 0:
             self.steps_in_position += 1
             reward -= 0.0002
-            self.steps_flat = 0  # Reset flat counter when in position
 
-        # 4. Spread cost
+        # 3. Spread cost
         if trade_opened and trade_closed:
             reward -= spread * self.lot_contract * 0.02  # Flip = 2x
         elif trade_opened:
             reward -= spread * self.lot_contract * 0.01
 
-        # 5. Drawdown penalty — amplify losses during drawdown
+        # 4. Drawdown penalty — amplify losses during drawdown
         if self.peak_equity > 0:
             dd = (self.peak_equity - self.equity) / self.peak_equity
             if dd > 0.05 and reward < 0:
                 reward *= 1.5
 
-        # 6. Exponential inactivity penalty (24H → 48H ramp)
-        #    Flat and no trade action taken
-        if self.position == 0 and not trade_opened:
-            self.steps_flat += 1
-            if self.steps_flat > 1440:  # After 24H (1440 M1 bars)
-                # Exponential ramp: starts small, doubles every 720 bars (~12H)
-                hours_over = (self.steps_flat - 1440) / 60.0
-                penalty = 0.001 * (2.0 ** (hours_over / 12.0))  # Doubles every 12H
-                penalty = min(penalty, 0.05)  # Cap at -0.05/step
-                reward -= penalty
-        else:
-            if trade_opened:
-                self.steps_flat = 0
-
         # ── Advance ────────────────────────────────
         self.current_step += 1
         terminated = self.current_step >= self.n_steps - 1
 
-        # Force close at end — NO REWARD (agent must learn to close itself)
+        # Force close at end
         if terminated and self.position != 0:
             bar_idx = self.start_idx + min(self.current_step, self.n_steps - 1)
             ep = self.close_prices[bar_idx]
-            self._close_position(ep)  # Just close, no reward
-            # Penalize leaving position open — teaches agent to close before episode ends
-            reward -= 0.5
+            final_pnl = self._close_position(ep)
+            if final_pnl != 0:
+                old_b = self.balance - final_pnl
+                if old_b > 0 and self.balance > 0:
+                    reward += np.log(self.balance / old_b) * 100
 
         # Margin call / bankruptcy
         if self.equity <= 0 or (self.margin_used > 0 and self.equity < self.margin_used * 0.2):
