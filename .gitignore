@@ -1,36 +1,45 @@
 # ── Credentials & Secrets ──
-config.py
+# Anchored to the repo root: this is the credentials file only.
+# An unanchored "config.py" would also swallow backtester/config.py.
+/config.py
+.env
 
 # ── Logs & Output ──
 logs/
 *.log
+backtest_chart.html
 
 # ── Data Files ──
 Datafiles/
+tick_export/
 *.csv
 
 # ── Trained Models ──
 models/
 *.zip
 *.pkl
+*.h5
+*.npy
 *.pt
 *.pth
+*.ckpt
 *.onnx
 
 # ── Python ──
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.egg-info/
 dist/
 build/
 .eggs/
 *.egg
+.ipynb_checkpoints/
 
 # ── Virtual Environment ──
 venv/
 .venv/
 env/
+ENV/
 
 # ── IDE ──
 .vscode/
@@ -38,10 +47,13 @@ env/
 *.swp
 *.swo
 
-# ── Testing ──
+# ── Testing & Type Checking ──
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 htmlcov/
 .coverage
+.coverage.*
 
 # ── TensorBoard ──
 runs/
