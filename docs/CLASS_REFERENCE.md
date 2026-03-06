@@ -1,8 +1,14 @@
 # RL Trading System — Class Reference
 
+> Snapshot note: this reference was written against the code preserved in `review/`
+> (see "The `review/` folder" in the main [README](../README.md)). The class and method
+> signatures still match `rl_model/`, but `rl_model/trading_env.py` has gained reward
+> components since. Read the source for the authoritative behaviour.
+
+
 ## 1. TradingEnv (Gymnasium Environment)
 
-**File**: [trading_env.py](file:///c:/Projects/Trading/XAU_LEarningModel/rl_model/trading_env.py)
+**File**: [trading_env.py](../rl_model/trading_env.py)
 
 ```python
 class TradingEnv(gym.Env):
@@ -175,7 +181,7 @@ if equity_drawdown > 5% and reward < 0:
 
 ## 3. PPO Training Loop (Stable-Baselines3)
 
-**File**: [trainer.py](file:///c:/Projects/Trading/XAU_LEarningModel/trainer.py)
+**File**: [trainer.py](../trainer.py)
 
 ### Single-Month Training
 
@@ -239,7 +245,7 @@ Input (14-dim obs)
 
 ## 4. Observation Space (Feature Engineering)
 
-**File**: [features.py](file:///c:/Projects/Trading/XAU_LEarningModel/rl_model/features.py)
+**File**: [features.py](../rl_model/features.py)
 
 ```python
 def precompute_features(df) → np.array(N, 12):

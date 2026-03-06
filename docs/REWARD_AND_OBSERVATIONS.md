@@ -1,5 +1,12 @@
 # Reward Function & Observation Space (v3 — Post Review)
 
+> Snapshot note: the 14-dimension observation space below is still accurate for both
+> `rl_model/trading_env.py` and `review/trading_env.py`. The four-component reward it
+> describes matches `review/trading_env.py` only — `rl_model/trading_env.py` has since
+> added a differential-Sharpe term and an exponential inactivity penalty (six components).
+> See "The `review/` folder" in the main [README](../README.md).
+
+
 ## Observation Space
 
 `Box(14,)` float32, range [-10, 10]
