@@ -4,8 +4,11 @@ Configuration Template
 Copy this file to `config.py` and fill in your own values.
 
 `config.py` is git-ignored on purpose — it holds MT5 account credentials.
-Every module in this project imports it as `import config`, so the file must
-exist at the repository root before anything will run.
+Nine modules import it directly as `import config` (main, data_manager,
+mt5_connection, trade_executor, account_monitor, trade_logger, rl_model/train,
+rl_model/evaluate and tests/test_data_manager); the backtester package picks it
+up transitively through data_manager. The file must exist at the repository root
+before anything useful will run.
 """
 
 import os

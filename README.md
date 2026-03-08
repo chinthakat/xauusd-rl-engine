@@ -27,9 +27,12 @@ Specifically:
 This is trading software. It can place real orders.
 
 - Nothing here is financial advice, and no part of it is a recommendation to trade.
-- Trading gold with leverage can lose money faster than the account can absorb.
-  `config.MAX_POSITIONS` and `config.DEFAULT_SL_POINTS` are the only guard rails, and
-  the live loop closing all open positions on shutdown is not a risk management system.
+- Trading gold with leverage can lose money faster than the account can absorb. The only
+  guard rails are the pre-trade checks in `trade_executor.py` — `config.MAX_SPREAD_POINTS`
+  (entry refused above that spread), `config.MAX_POSITIONS` (cap on simultaneous
+  positions), `config.MAX_SLIPPAGE` (passed as the order `deviation`) and
+  `config.DEFAULT_SL_POINTS` (fallback stop distance) — plus the live loop closing all
+  open positions on shutdown. That is not a risk management system.
 - Use a **demo/paper account only**. `MT5_ACCOUNT` in `config.py` should point at a
   demo server. The code does not check whether the account it logs into is a demo one.
 - The backtester models spread, slippage, latency, commission, swap and margin, but a
@@ -81,6 +84,9 @@ flowchart TD
     TRAIN["train.py / parallel_train.py / quick_train.py / trainer.py"]
     MODEL[("models/ppo_xauusd_*.zip")]
 
+    BRIDGE["rl_model/mt5_bridge.py — CSV file IPC"]
+    MENV["rl_model/mt5_backtest_env.py — Gymnasium env over the bridge"]
+
     AGENT["rl_model/live_agent.py — RLAgent.get_signal"]
     MA["main.get_signal_ma_crossover"]
     BT["backtester/ — engine, orders, account, report"]
@@ -101,8 +107,10 @@ flowchart TD
     MA --> LIVE
     LIVE --> EXEC
     EXEC --> TERM
-    RB --> ENV
-    ENV --> RB
+    RB --> BRIDGE
+    BRIDGE --> RB
+    BRIDGE --> MENV
+    MENV -->|"train.py --mode mt5"| TRAIN
 ```
 
 ## Requirements
@@ -110,9 +118,11 @@ flowchart TD
 - **Windows.** The `MetaTrader5` Python package is Windows-only, and several paths are
   built from `%APPDATA%`. There is no Linux or macOS path in this code.
 - A MetaTrader 5 terminal, installed and logged in to a demo account.
-- Python. No version is pinned anywhere in the repo; the dependency set
-  (`stable-baselines3` 2.x, `gymnasium` 0.29, `torch` 2.x, `MetaTrader5` 5.0.45) is what
-  CPython 3.10–3.11 on Windows supports.
+- Python. No version is pinned anywhere in the repo — both requirements files give `>=`
+  floors only, and nothing declares a supported interpreter range. The tests and the
+  backtester were last run on CPython 3.13 on Windows, with the whole stack
+  (`MetaTrader5`, `torch`, `stable-baselines3`, `gymnasium`, `plotly`, `pandas`, `numpy`,
+  `pytest`) importing cleanly. Older 3.x versions are untested here.
 - An NVIDIA GPU is optional. Training falls back to CPU, and `--cpu` forces it.
 
 Dependencies live in two files:
@@ -131,6 +141,9 @@ it (`pip install plotly`) or pass `--no-chart` to the backtester.
 git clone https://github.com/chinthakat/xauusd-rl-engine.git
 cd xauusd-rl-engine
 
+# Only needed if you redirect output to a file or pipe; see UTF-8 output below.
+$env:PYTHONUTF8 = 1
+
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
@@ -145,8 +158,44 @@ copy config.example.py config.py
 # then edit config.py with your demo account details
 ```
 
-`config.py` is git-ignored. It is not optional — every module does `import config`, so
-nothing starts without it.
+`config.py` is git-ignored, and in practice it is not optional. Nine modules import it
+directly — `main.py`, `data_manager.py`, `mt5_connection.py`, `trade_executor.py`,
+`account_monitor.py`, `trade_logger.py`, `rl_model/train.py`, `rl_model/evaluate.py` and
+`tests/test_data_manager.py`. The `backtester/` package does not import it itself, but
+`backtester/run.py` imports `data_manager` at run time, which does — so it is required
+there too. Nothing useful starts without it.
+
+### UTF-8 output when redirecting
+
+Several modules print U+2500 box-drawing characters and U+2192 arrows to stdout
+(`data_manager.py`, `trade_logger.print_summary`, `backtester/report.py`).
+
+In an ordinary console window these are fine: since PEP 528, CPython writes to the
+Windows console through `WriteConsoleW` and reports `sys.stdout.encoding` as `utf-8`
+whatever the active code page. `python data_manager.py`, `python main.py --backtest`
+and `python -m backtester.run` all run to completion interactively.
+
+The failure appears when stdout is **redirected to a file or a pipe**. There the console
+is out of the picture and the encoding falls back to `locale.getpreferredencoding()`,
+which on a Western-European Windows install is cp1252 — and those characters raise
+`UnicodeEncodeError` mid-report. In the backtester's case the crash lands before
+`--export-csv` writes anything, so a piped run produces no CSV:
+
+```powershell
+python -m backtester.run --no-chart --export-csv > run.log 2>&1   # UnicodeEncodeError
+```
+
+If you log to a file, or run this from CI or a scheduled task, set:
+
+```powershell
+$env:PYTHONUTF8 = 1
+```
+
+`chcp 65001` does **not** help here. It changes the console output code page, but a
+redirected stdout never consults it — the encoding comes from `GetACP()`, which `chcp`
+does not touch. `PYTHONUTF8=1` is the only fix.
+
+The source is unfixed; this is a workaround, not a solution.
 
 ### Getting data
 
@@ -199,6 +248,10 @@ Backtester settings are a dataclass rather than config keys — see `backtester/
 presets).
 
 ## Usage
+
+The commands below run as written in an ordinary console window. If you redirect their
+output to a file or a pipe, set `$env:PYTHONUTF8 = 1` first — see
+[UTF-8 output when redirecting](#utf-8-output-when-redirecting).
 
 Sanity-check the connection and the data layer first — both modules are runnable:
 
@@ -316,13 +369,20 @@ Keep it or delete it, but do not assume it is in sync with `rl_model/`.
 
 ```powershell
 pip install -r requirements.txt
+copy config.example.py config.py     # tests/test_data_manager.py does `import config`
 python -m pytest tests -v
 ```
+
+`config.py` is not optional here: the test module imports it at module scope for
+`config.DATA_DIR`, so without it pytest fails at collection with `ModuleNotFoundError`
+rather than skipping.
 
 `tests/test_data_manager.py` holds 28 tests across four classes: CSV loading and
 integrity, moving-average correctness, the MA crossover signal, and the trade-logger
 metrics. The CSV tests skip themselves when `config.DATA_DIR/XAUUSD_M1_2025_03.csv` is
-missing, so on a fresh clone with no data only the signal and metrics tests actually run.
+missing, so on a fresh clone with no data the run is 10 passed, 18 skipped — the five
+signal tests, the four metrics tests, and `TestLoadCSV::test_file_not_found_error`, which
+takes no CSV fixture.
 
 ## License
 
