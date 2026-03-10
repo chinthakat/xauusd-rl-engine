@@ -7,19 +7,15 @@ account through the `MetaTrader5` Python API.
 
 ## Status
 
-Experimental and unfinished. Treat it as a personal research sandbox, not a product.
-Specifically:
+Personal research sandbox, unfinished.
 
-- No trained model, no historical data, and no `config.py` are committed — you have to
-  supply all three before anything runs (see [Setup](#setup)).
-- There are no published performance results in this repo. Any claim about how the agent
-  performs would have to come from your own run.
-- Test coverage is one file (`tests/test_data_manager.py`) covering the data layer, the
-  MA signal, and the metrics helper. The RL environment, the backtester and the
-  execution layer are untested.
-- `review/` is a frozen duplicate of the RL code as it stood at an earlier review point.
-  Nothing imports it, and it has since drifted — see
-  [The `review/` folder](#the-review-folder).
+- No trained model, historical data or `config.py` is committed - supply all three before
+  anything runs (see [Setup](#setup)).
+- No performance results are published here.
+- Test coverage is one file, `tests/test_data_manager.py`, covering the data layer, the MA signal
+  and the metrics helper. The RL environment, backtester and execution layer are untested.
+- `review/` is a frozen duplicate of the RL code from an earlier point and has since drifted -
+  see [The `review/` folder](#the-review-folder).
 - There is no CI.
 
 ## Risk notice
